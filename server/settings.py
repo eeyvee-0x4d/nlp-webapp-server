@@ -58,11 +58,11 @@ MIDDLEWARE = [
 ]
 
 CORS_ALLOWED_ORIGINS = [
-    "*",
-    # "http://localhost:3000",
-    # "http://127.0.0.1:3000",
-    # "http://localhost:4173",
-    # "https://nlp-webapp-client.herokuapp.com"
+    "http://192.168.254.193:4173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:4173",
+    "https://nlp-webapp-client.herokuapp.com"
 ]
 
 ROOT_URLCONF = 'server.urls'
