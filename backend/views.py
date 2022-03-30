@@ -293,8 +293,12 @@ def model_stats(request):
 
 	data = ''
 
-	with open('../server/storage/models/model_stats.json') as f:
+	with open('storage/models/model_stats.json') as f:
 		data = json.load(f)
 
 	return Response(data)
+
+@api_view(['GET'])
+def test(request):
+	return Response("Test")
 
