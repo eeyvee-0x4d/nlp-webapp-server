@@ -2,3 +2,4 @@ pandas==1.4.1
 scikit-learn==1.0.2
 nltk==3.7
 stopwordsiso==0.6.1
+django==4.0.3
