@@ -9,7 +9,7 @@ from django.core.files.storage import default_storage
 
 from collections import Counter, OrderedDict
 
-from .utils import preprocess_text, remove_stopwords
+from .utils import preprocess_text, remove_stopwords, createSession, getEncoding
 
 import codecs
 import sklearn
@@ -18,72 +18,62 @@ import re
 import os
 import traceback
 import json
+import chardet
 
 import pandas as pd
 
 
-# Create your views here.
+"""
+This end point will create a session cookie and send back the id
+of the session
+"""
+@api_view(['GET'])
+def session(request):
+	
+	if request.query_params['get_cookie']:
+		session_key = createSession(request)
+
+		data = {
+			'sessionid': session_key
+		}
+
+		response = Response(data=data)
+		return response
+	else:
+		return Response(status=301)
+
+"""
+This endpoint will save the file uploaded and preprocess the file.
+"""
 @api_view(['POST'])
 def upload(request):
 
-	model = pickle.load(open('storage/models/model.pkl', 'rb'))
-	vectorizer = pickle.load(open('storage/models/vectorizer.pkl', 'rb'))
-
-
 	if request.method == 'POST':
-		files = request.FILES
+		if request.COOKIES.get('sessionid'):
+			session_id = request.COOKIES.get('sessionid')
 
-		expected_files = {
-			'Pfizer': None,
-			'Sinovac': None,
-			'Astrazeneca': None,
-			'Moderna': None
-		}
+			uploaded_file = request.FILES['file']
 
-		if os.path.exists('storage/uploads/pfizer/pfizer.csv'):
-				os.remove('storage/uploads/pfizer/pfizer.csv')
+			file_path = f"storage/uploads/{session_id}.csv"
 
-		if os.path.exists('storage/uploads/sinovac/sinovac.csv'):
-				os.remove('storage/uploads/sinovac/sinovac.csv')
+			if os.path.exists(file_path):
+				os.remove(file_path)
+				file_path = default_storage.save(f"storage/uploads/{session_id}.csv", ContentFile(uploaded_file.read()))
 
-		if os.path.exists('storage/uploads/astrazeneca/astrazeneca.csv'):
-				os.remove('storage/uploads/astrazeneca/astrazeneca.csv')
+			else:
+				file_path = default_storage.save(f"storage/uploads/{session_id}.csv", ContentFile(uploaded_file.read()))
 
-		if os.path.exists('storage/uploads/moderna/moderna.csv'):
-				os.remove('storage/uploads/moderna/moderna.csv')
-
-		if os.path.exists('storage/uploads/pfizer/_pfizer.csv'):
-			os.remove('storage/uploads/pfizer/_pfizer.csv')
-
-		if os.path.exists('storage/uploads/sinovac/_sinovac.csv'):
-				os.remove('storage/uploads/sinovac/_sinovac.csv')
-
-		if os.path.exists('storage/uploads/astrazeneca/_astrazeneca.csv'):
-				os.remove('storage/uploads/astrazeneca/_astrazeneca.csv')
-
-		if os.path.exists('storage/uploads/moderna/_moderna.csv'):
-				os.remove('storage/uploads/moderna/_moderna.csv')
-
-
-		for file in files:
-
-			df = pd.read_csv(files[file])
-			df.to_csv('storage/uploads/' + file.lower() + '/' + file.lower() + '.csv')
-
-			corpus = df
-			corpus = preprocess_text(corpus)
-			corpus = remove_stopwords(corpus)
+			file_encoding = getEncoding(file_path)
 			
-			corpus = vectorizer.transform(corpus['Text'])
-			predictions = model.predict(corpus)
+			df = pd.read_csv(file_path, encoding=file_encoding)
+			
+			# TODO: text preprocessing
+		else:
+			return Response(status=301)
 
-			predictions = pd.Series(predictions)
+	response = Response()
 
-			df = pd.read_csv('storage/uploads/' + file.lower() + '/' + file.lower() + '.csv')
-			df['Sentiment'] = predictions.values
-			df.to_csv('storage/uploads/' + file.lower() + '/_' + file.lower() + '.csv')
-
-	return Response("test")
+	return response
 
 @api_view(['GET'])
 def data_overview(request):
@@ -300,5 +290,6 @@ def model_stats(request):
 
 @api_view(['GET'])
 def test(request):
-	return Response("Test")
+	print(request.session.decode())
+	return Response("Hello")
 

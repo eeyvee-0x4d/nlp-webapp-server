@@ -10,7 +10,11 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.0/ref/settings/
 """
 
+from dotenv import dotenv_values
 from pathlib import Path
+
+# enviroment variables
+CONFIG = dotenv_values()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -55,6 +59,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'django_samesite_none.middleware.SameSiteNoneMiddleware'
 ]
 
 CORS_ALLOWED_ORIGINS = [
@@ -64,6 +69,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:4173",
     "https://nlp-webapp-client.herokuapp.com"
 ]
+
+CORS_ALLOW_CREDENTIALS = True
 
 ROOT_URLCONF = 'server.urls'
 
@@ -138,3 +145,7 @@ STATIC_ROOT = "static/"
 # https://docs.djangoproject.com/en/4.0/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+SESSION_ENGINE = 'django.contrib.sessions.backends.signed_cookies'
+SESSION_COOKIES_SAMESITE = 'None'
+SESSION_COOKIE_DOMAIN = CONFIG['DOMAIN']

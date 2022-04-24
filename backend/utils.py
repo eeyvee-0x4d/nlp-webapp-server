@@ -3,10 +3,14 @@ import stopwordsiso
 import re
 import sklearn
 import pickle
+import chardet
 
 from nltk.stem import *
 from nltk.corpus import stopwords
 from nltk.util import ngrams
+
+from django.contrib.sessions.backends.db import SessionStore
+from django.contrib.sessions.models import Session
 
 def preprocess_text(data_frame):
 
@@ -58,3 +62,19 @@ def classify(data_frame):
 	data_frame['Sentiments'] = predictions.values
 
 	return data_frame
+
+def createSession(request):
+
+	session = SessionStore()
+	session['foo'] = 'bar'
+	session.create()
+
+	return session.session_key
+
+def getEncoding(file_path):
+
+	with open(file_path, 'rb') as f:
+		result = chardet.detect(f.read(10000))
+
+	return result['encoding']
+
