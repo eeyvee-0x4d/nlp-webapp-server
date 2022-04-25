@@ -78,3 +78,36 @@ def getEncoding(file_path):
 
 	return result['encoding']
 
+def preprocessData(data_frame):
+
+	# remove duplicates
+	data_frame.drop_duplicates(subset=['Text'], inplace=True, ignore_index=True)
+
+	rows, columns = data_frame.shape
+
+	# RegEx patterns to match specifi keywords
+	PATTERN_1 = r'(RT )'
+	PATTERN_2 = re.compile('pfizer|pfizerbiontech|pfizervaccine', re.IGNORECASE)
+	PATTERN_3 = re.compile('sinovac|sinovacvaccine|sinovacbiotech', re.IGNORECASE)
+	PATTERN_4 = re.compile('astrazeneca|astrazenecavaccine|oxford|oxfordastrazeneca', re.IGNORECASE)
+	PATTERN_5 = re.compile('moderna|modernavaccine', re.IGNORECASE)
+
+	for i in range(rows):
+		if re.match(PATTERN_1, data_frame.at[i, 'Text']):
+			data_frame.drop([i])
+		elif re.search(PATTERN_2, data_frame.at[i, 'Text']):
+			data_frame.at[i, 'Brand'] = 'Pfizer'
+		elif re.search(PATTERN_3, data_frame.at[i, 'Text']):
+			data_frame.at[i, 'Brand'] = 'Sinovac'
+		elif re.search(PATTERN_4, data_frame.at[i, 'Text']):
+			data_frame.at[i, 'Brand'] = 'Astrazeneca'
+		elif re.search(PATTERN_5, data_frame.at[i, 'Text']):
+			data_frame.at[i, 'Brand'] = 'Moderna'
+		else:
+			data_frame.at[i, 'Brand'] = 'Unknown'
+
+	# drop columns except Created-At and Text columns
+	data_frame = data_frame[['Created-At', 'Text', 'Brand']]
+
+	return data_frame
+
