@@ -9,7 +9,8 @@ from django.core.files.storage import default_storage
 
 from collections import Counter, OrderedDict
 
-from .utils import preprocess_text, remove_stopwords, createSession, getEncoding, preprocessData
+from .utils import classify, preprocess_text, remove_stopwords, createSession, getEncoding, preprocessData
+from .logger import logger
 
 import codecs
 import sklearn
@@ -67,6 +68,11 @@ def upload(request):
 			
 			df = pd.read_csv(file_path, encoding=file_encoding)
 			df = preprocessData(df)
+
+			# save to csv
+			df.to_csv(path_or_buf=f'storage/uploads/{session_id}.csv', index=False)
+
+			df = classify(df, filepath=file_path)
 
 			# save to csv
 			df.to_csv(path_or_buf=f'storage/uploads/{session_id}.csv')
