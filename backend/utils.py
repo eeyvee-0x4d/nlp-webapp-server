@@ -68,7 +68,7 @@ def classify(data_frame, filepath):
 	predictions = pd.Series(predictions)
 
 	data_frame = pd.read_csv(filepath)
-	data_frame['Sentiments'] = predictions.values
+	data_frame['Sentiment'] = predictions.values
 
 	return data_frame
 
@@ -91,7 +91,8 @@ def preprocessData(data_frame):
 
 	# drop columns except Created-At and Text columns
 	data_frame = data_frame[['Created-At', 'Text']]
-
+	data_frame['Text'] = data_frame['Text'].fillna('').apply(str)
+	data_frame['Created-At'] = pd.to_datetime(data_frame['Created-At'], infer_datetime_format=True)
 
 	# RegEx patterns to match specifi keywords
 	PATTERN_1 = r'(RT )'
@@ -104,6 +105,7 @@ def preprocessData(data_frame):
 		if re.match(PATTERN_1, data_frame.at[index, 'Text']):
 			data_frame = data_frame.drop([index])
 			data_frame.reset_index(drop=True)
+			logger.info(f"index: {index}")
 		elif re.search(PATTERN_2, data_frame.at[index, 'Text']):
 			data_frame.loc[index, 'Brand'] = 'Pfizer'
 		elif re.search(PATTERN_3, data_frame.at[index, 'Text']):
