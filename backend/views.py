@@ -1,4 +1,4 @@
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse, JsonResponse, FileResponse
 
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -77,6 +77,7 @@ def upload(request):
 			# save to csv
 			df.to_csv(path_or_buf=f'storage/uploads/{session_id}.csv')
 
+			return Response()
 		else:
 			return Response(status=401)
 	else:
@@ -237,52 +238,6 @@ def all_data(request):
 	else:
 		return Response(status=405)
 
-	frames = []
-
-	if os.path.exists('storage/uploads/pfizer/_pfizer.csv'):
-			frame_1 = pd.read_csv('storage/uploads/pfizer/_pfizer.csv')
-			frame_1 = frame_1[['Created-At','Text', 'Sentiment']]
-			frames.append(frame_1)
-
-	if os.path.exists('storage/uploads/sinovac/_sinovac.csv'):
-			frame_2 = pd.read_csv('storage/uploads/sinovac/_sinovac.csv')
-			frame_2 = frame_2[['Created-At','Text', 'Sentiment']]
-			frames.append(frame_2)
-
-	if os.path.exists('storage/uploads/astrazeneca/_astrazeneca.csv'):
-			frame_3 = pd.read_csv('storage/uploads/astrazeneca/_astrazeneca.csv')
-			frame_3 = frame_3[['Created-At','Text', 'Sentiment']]
-			frames.append(frame_3)
-
-	if os.path.exists('storage/uploads/moderna/_moderna.csv'):
-			frame_4 = pd.read_csv('storage/uploads/moderna/_moderna.csv')
-			frame_4 = frame_4[['Created-At','Text', 'Sentiment']]
-			frames.append(frame_4)
-
-	result = pd.concat(frames, ignore_index=True, sort=False)
-
-	rows = result.shape[0]
-	# return Response(result.to_json(orient='index'))
-	page_number = 0 if (request.GET.get('page_number') is None) else int(request.GET.get('page_number')) - 1
-	page_size = 20 if (request.GET.get('page_size') is None) else int(request.GET.get('page_size'))
-
-	start = page_number * page_size
-	end = (start + page_size) if ((start + page_size) < rows) else rows
-	# print(result.iloc[start:end])
-
-	headers = {}
-	headers['Total-Count'] = rows
-	headers['Total-Pages'] = int(round(rows / page_size, 0))
-	headers['Current-Page'] = page_number + 1
-	headers['Page-Size'] = page_size
-	# print(headers)
-
-	data = result.iloc[start:end]
-	data = data.to_json(orient='index')
-
-	# print(result.iloc[0:10])
-	return Response(data=data, headers=headers)
-
 @api_view(['GET'])
 def model_stats(request):
 
@@ -292,6 +247,29 @@ def model_stats(request):
 		data = json.load(f)
 
 	return Response(data)
+
+@api_view(['GET'])
+def export_file(request):
+	if 'GET' == request.method:
+		if request.COOKIES.get('sessionid'):
+			session_id = request.COOKIES.get('sessionid')
+			
+			# f = open(f'storage/uploads/{session_id}.csv', 'rb')
+
+			# headers = {
+			# 'Content-Type': 'text/csv',
+			# 'Content-Disposition': 'attachment; filename="Sentiment Analysis.csv"'
+			# }
+			
+			# response = Response(data=f, headers=headers)
+
+			response = FileResponse(open(f'storage/uploads/{session_id}.csv', 'rb'), filename="Sentiment Analysis.csv")
+
+			return response
+		else:
+			return Response(status=401)
+	else:
+		return Response(status=405)
 
 @api_view(['GET'])
 def test(request):

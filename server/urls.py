@@ -26,5 +26,6 @@ urlpatterns = [
     path('sentiment_trend/', views.sentiment_trend, name='sentiment_trend'),
     path('all_data/', views.all_data, name='all_data'),
     path('model_stats/', views.model_stats, name='model_stats'),
-    path('test/', views.test, name='test')
+    path('test/', views.test, name='test'),
+    path('export_file/', views.export_file, name='export_file')
 ]
