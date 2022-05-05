@@ -1,4 +1,4 @@
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse, JsonResponse, FileResponse
 
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -9,7 +9,8 @@ from django.core.files.storage import default_storage
 
 from collections import Counter, OrderedDict
 
-from .utils import preprocess_text, remove_stopwords
+from .utils import classify, preprocess_text, remove_stopwords, createSession, getEncoding, preprocessData
+from .logger import logger
 
 import codecs
 import sklearn
@@ -18,197 +19,142 @@ import re
 import os
 import traceback
 import json
+import chardet
 
 import pandas as pd
 
 
-# Create your views here.
+"""
+This end point will create a session cookie and send back the id
+of the session
+"""
+@api_view(['GET'])
+def session(request):
+	
+	if request.query_params['get_cookie']:
+		session_key = createSession(request)
+
+		data = {
+			'sessionid': session_key
+		}
+
+		response = Response(data=data)
+		return response
+	else:
+		return Response(status=301)
+
+"""
+This endpoint will save the file uploaded and preprocess the file.
+"""
 @api_view(['POST'])
 def upload(request):
 
-	model = pickle.load(open('storage/models/model.pkl', 'rb'))
-	vectorizer = pickle.load(open('storage/models/vectorizer.pkl', 'rb'))
-
-
 	if request.method == 'POST':
-		files = request.FILES
+		if request.COOKIES.get('sessionid'):
+			session_id = request.COOKIES.get('sessionid')
 
-		expected_files = {
-			'Pfizer': None,
-			'Sinovac': None,
-			'Astrazeneca': None,
-			'Moderna': None
-		}
+			uploaded_file = request.FILES['file']
 
-		if os.path.exists('storage/uploads/pfizer/pfizer.csv'):
-				os.remove('storage/uploads/pfizer/pfizer.csv')
+			file_path = f"storage/uploads/{session_id}.csv"
 
-		if os.path.exists('storage/uploads/sinovac/sinovac.csv'):
-				os.remove('storage/uploads/sinovac/sinovac.csv')
+			if os.path.exists(file_path):
+				os.remove(file_path)
+				file_path = default_storage.save(f"storage/uploads/{session_id}.csv", ContentFile(uploaded_file.read()))
 
-		if os.path.exists('storage/uploads/astrazeneca/astrazeneca.csv'):
-				os.remove('storage/uploads/astrazeneca/astrazeneca.csv')
+			else:
+				file_path = default_storage.save(f"storage/uploads/{session_id}.csv", ContentFile(uploaded_file.read()))
 
-		if os.path.exists('storage/uploads/moderna/moderna.csv'):
-				os.remove('storage/uploads/moderna/moderna.csv')
-
-		if os.path.exists('storage/uploads/pfizer/_pfizer.csv'):
-			os.remove('storage/uploads/pfizer/_pfizer.csv')
-
-		if os.path.exists('storage/uploads/sinovac/_sinovac.csv'):
-				os.remove('storage/uploads/sinovac/_sinovac.csv')
-
-		if os.path.exists('storage/uploads/astrazeneca/_astrazeneca.csv'):
-				os.remove('storage/uploads/astrazeneca/_astrazeneca.csv')
-
-		if os.path.exists('storage/uploads/moderna/_moderna.csv'):
-				os.remove('storage/uploads/moderna/_moderna.csv')
-
-
-		for file in files:
-
-			df = pd.read_csv(files[file])
-			df.to_csv('storage/uploads/' + file.lower() + '/' + file.lower() + '.csv')
-
-			corpus = df
-			corpus = preprocess_text(corpus)
-			corpus = remove_stopwords(corpus)
+			file_encoding = getEncoding(file_path)
 			
-			corpus = vectorizer.transform(corpus['Text'])
-			predictions = model.predict(corpus)
+			df = pd.read_csv(file_path, encoding=file_encoding)
+			df = preprocessData(df)
 
-			predictions = pd.Series(predictions)
+			# save to csv
+			df.to_csv(path_or_buf=f'storage/uploads/{session_id}.csv', index=False)
 
-			df = pd.read_csv('storage/uploads/' + file.lower() + '/' + file.lower() + '.csv')
-			df['Sentiment'] = predictions.values
-			df.to_csv('storage/uploads/' + file.lower() + '/_' + file.lower() + '.csv')
+			df = classify(df, filepath=file_path)
 
-	return Response("test")
+			# save to csv
+			df.to_csv(path_or_buf=f'storage/uploads/{session_id}.csv')
+
+			return Response()
+		else:
+			return Response(status=401)
+	else:
+		return Response(status=405)
 
 @api_view(['GET'])
 def data_overview(request):
 
-	data = {
-		'pfizer':  None,
-		'sinovac':  None,
-		'astrazeneca':  None,
-		'moderna':  None,
-	}
+	if 'GET' == request.method:
+		if request.COOKIES.get('sessionid'):
+			session_id = request.COOKIES.get('sessionid')
 
-	for key in data:
-		try:
-			df = pd.read_csv('storage/uploads/' + key + '/' + key + '.csv')
-			num_tweets = df.shape[0]
-			data[key] = num_tweets
-		except:
-			data[key] = None
+			df = pd.read_csv(f'storage/uploads/{session_id}.csv')
 
-	return Response(data)
+			data = {}
+
+			data['Overall'] = df.shape[0]
+
+			for brand in ['Pfizer', 'Sinovac', 'Astrazeneca', 'Moderna']:
+				per_brand = df.loc[brand == df['Brand']]
+				data[brand] = per_brand.shape[0]
+
+			return Response(data=data)
+		else:
+			return Response(status=401)
+	else:
+		return Response(status=405)
 
 @api_view(['GET'])
 def sentiment_overview(request):
 
-	data = [
-		{
-			'name': 'pfizer',
-			'sentiments': [
-				{
-					'positive': 0,
-					'negative': 0
-				}
-			]
-		},
-		{
-			'name': 'sinovac',
-			'sentiments': [
-				{
-					'positive': 0,
-					'negative': 0
-				}
-			]
-		},
-		{
-			'name': 'astrazeneca',
-			'sentiments': [
-				{
-					'positive': 0,
-					'negative': 0
-				}
-			]
-		},
-		{
-			'name': 'moderna',
-			'sentiments': [
-				{
-					'positive': 0,
-					'negative': 0
-				}
-			]
-		},
-	]
+	if 'GET' == request.method:
+		if request.COOKIES.get('sessionid'):
 
-	for item in data:
-		try:
-			df = pd.read_csv('storage/uploads/' + item['name'] + '/_' + item['name'] + '.csv')
+			session_id = request.COOKIES.get('sessionid')
+
+			df = pd.read_csv(f'storage/uploads/{session_id}.csv')
 
 			count_dict = dict(Counter(df['Sentiment']))
-			item['sentiments'] = [
-				{
+
+			data = {}
+
+			data['Overall'] = {
+				'positive': count_dict[1],
+				'negative': count_dict[0]
+			}
+
+			for brand in ['Pfizer', 'Sinovac', 'Astrazeneca', 'Moderna']:
+				per_brand = df.loc[brand == df['Brand']]
+				count_dict = dict(Counter(per_brand['Sentiment']))
+
+				data[brand] = {
 					'positive': count_dict[1],
 					'negative': count_dict[0]
 				}
-			]
 
-		except FileNotFoundError:
-			item['sentiments'] = None
-		except Exception as e:
-			raise APIException(repr(e))
+			return Response(data=data)
+		else:
+			return Response(status=401)
 
-	return Response(data)
+	else:
+		return Response(status=405)
 
 @api_view(['GET'])
 def sentiment_trend(request):
 
-	# model = pickle.load(open('storage/models/model.pkl', 'rb'))
-	# vectorizer = pickle.load(open('storage/models/vectorizer.pkl', 'rb'))
+	if 'GET' == request.method:
+		if request.COOKIES.get('sessionid'):
+			session_id = request.COOKIES.get('sessionid')
 
-	data = [
-		{
-			'name': 'pfizer',
-			'sentiments': []
-		},
-		{
-			'name': 'sinovac',
-			'sentiments': []
-		},
-		{
-			'name': 'astrazeneca',
-			'sentiments': []
-		},
-		{
-			'name': 'moderna',
-			'sentiments': []
-		},
-	]
+			df = pd.read_csv(f'storage/uploads/{session_id}.csv')
 
-	for item in data:
-		try:
-			df = pd.read_csv('storage/uploads/' + item['name'] + '/_' + item['name'] + '.csv')
+			df['Created-At'] = pd.to_datetime(df['Created-At'], infer_datetime_format=True)
+			df['Created-At'] = pd.to_datetime(df['Created-At']).dt.to_period('M')
+			df['Created-At'] = df['Created-At'].apply(str)
 
-			df_shape = df.shape
-			for i in range(df_shape[0]):
-				s = re.sub(r' (\d{2}):(\d{2}):(\d{2})', '', df.at[i, 'Created-At']).split('-')
-				s = s[0] + '/' + s[1]
-				df.at[i, 'Created-At'] = s
-			
-			# df = preprocess_text(df)
-			# df = remove_stopwords(df)
-
-			# corpus = vectorizer.transform(df['Text'])
-			# predictions = model.predict(corpus)
-
-			# predictions = pd.Series(predictions)
-			# df['Sentiments'] = predictions.values
+			data = {}
 
 			labels = df['Created-At'].value_counts()
 			labels = labels.keys()
@@ -217,76 +163,80 @@ def sentiment_trend(request):
 			negative_sentiments = {}
 
 			for label in labels:
-				df_shape = df.shape
-				pos_sentiments = 0
-				neg_sentiments = 0
-				for i in range(0, df_shape[0]):
-					if(df.at[i, 'Created-At'] == label and df.at[i, 'Sentiment'] == 1):
-					 	pos_sentiments += 1
-					elif(df.at[i, 'Created-At'] == label and df.at[i, 'Sentiment'] == 0):
-					  	neg_sentiments += 1
+				data_frame = df.loc[label == df['Created-At']]
 
-				positive_sentiments[label] = pos_sentiments
-				negative_sentiments[label] = neg_sentiments
+				sentiments = data_frame['Sentiment'].value_counts()
 
-			item['sentiments'].append(OrderedDict(sorted(positive_sentiments.items())))
-			item['sentiments'].append(OrderedDict(sorted(negative_sentiments.items())))
+				positive_sentiments[label] = sentiments[1] if 1 in sentiments else 0
+				negative_sentiments[label] = sentiments[0] if 0 in sentiments else 0
 
-		except FileNotFoundError:
-			item['sentiments'] = None
-		except Exception as e:
-			raise APIException(repr(e))
+			sentiments = []
+			sentiments.append(OrderedDict(sorted(positive_sentiments.items())))
+			sentiments.append(OrderedDict(sorted(negative_sentiments.items())))
 
-	return Response(data)
+			data['Overall'] = sentiments
+
+			for brand in ['Pfizer', 'Sinovac', 'Astrazeneca', 'Moderna']:
+				per_brand = df.loc[brand == df['Brand']]
+
+				for label in labels:
+					data_frame = per_brand.loc[label == per_brand['Created-At']]
+
+					sentiments = data_frame['Sentiment'].value_counts()
+
+					positive_sentiments[label] = sentiments[1] if 1 in sentiments else 0
+					negative_sentiments[label] = sentiments[0] if 0 in sentiments else 0
+
+				sentiments = []
+				sentiments.append(OrderedDict(sorted(positive_sentiments.items())))
+				sentiments.append(OrderedDict(sorted(negative_sentiments.items())))
+
+				data[brand] = sentiments
+
+			return Response(data=data)
+		else:
+			return Response(status=401)
+
+	else:
+		return Response(status=405)
 
 @api_view(['GET'])
 def all_data(request):
 
-	frames = []
+	if 'GET' == request.method:
+		if request.COOKIES.get('sessionid'):
+			session_id = request.COOKIES.get('sessionid')
 
-	if os.path.exists('storage/uploads/pfizer/_pfizer.csv'):
-			frame_1 = pd.read_csv('storage/uploads/pfizer/_pfizer.csv')
-			frame_1 = frame_1[['Created-At','Text', 'Sentiment']]
-			frames.append(frame_1)
+			result = pd.read_csv(f'storage/uploads/{session_id}.csv')
 
-	if os.path.exists('storage/uploads/sinovac/_sinovac.csv'):
-			frame_2 = pd.read_csv('storage/uploads/sinovac/_sinovac.csv')
-			frame_2 = frame_2[['Created-At','Text', 'Sentiment']]
-			frames.append(frame_2)
+			result = result[['Created-At', 'Text', 'Brand', 'Sentiment']]
 
-	if os.path.exists('storage/uploads/astrazeneca/_astrazeneca.csv'):
-			frame_3 = pd.read_csv('storage/uploads/astrazeneca/_astrazeneca.csv')
-			frame_3 = frame_3[['Created-At','Text', 'Sentiment']]
-			frames.append(frame_3)
+			rows = result.shape[0]
+			# return Response(result.to_json(orient='index'))
+			page_number = 0 if (request.GET.get('page_number') is None) else int(request.GET.get('page_number')) - 1
+			page_size = 20 if (request.GET.get('page_size') is None) else int(request.GET.get('page_size'))
 
-	if os.path.exists('storage/uploads/moderna/_moderna.csv'):
-			frame_4 = pd.read_csv('storage/uploads/moderna/_moderna.csv')
-			frame_4 = frame_4[['Created-At','Text', 'Sentiment']]
-			frames.append(frame_4)
+			start = page_number * page_size
+			end = (start + page_size) if ((start + page_size) < rows) else rows
+			# print(result.iloc[start:end])
 
-	result = pd.concat(frames, ignore_index=True, sort=False)
+			headers = {}
+			headers['Total-Count'] = rows
+			headers['Total-Pages'] = int(round(rows / page_size, 0))
+			headers['Current-Page'] = page_number + 1
+			headers['Page-Size'] = page_size
+			# print(headers)
 
-	rows = result.shape[0]
-	# return Response(result.to_json(orient='index'))
-	page_number = 0 if (request.GET.get('page_number') is None) else int(request.GET.get('page_number')) - 1
-	page_size = 20 if (request.GET.get('page_size') is None) else int(request.GET.get('page_size'))
+			data = result.iloc[start:end]
+			data = data.to_json(orient='index')
 
-	start = page_number * page_size
-	end = (start + page_size) if ((start + page_size) < rows) else rows
-	# print(result.iloc[start:end])
-
-	headers = {}
-	headers['Total-Count'] = rows
-	headers['Total-Pages'] = int(round(rows / page_size, 0))
-	headers['Current-Page'] = page_number + 1
-	headers['Page-Size'] = page_size
-	# print(headers)
-
-	data = result.iloc[start:end]
-	data = data.to_json(orient='index')
-
-	# print(result.iloc[0:10])
-	return Response(data=data, headers=headers)
+			# print(result.iloc[0:10])
+			logger.info(data)
+			return Response(data=data, headers=headers)
+		else:
+			return Response(status=401)
+	else:
+		return Response(status=405)
 
 @api_view(['GET'])
 def model_stats(request):
@@ -299,6 +249,30 @@ def model_stats(request):
 	return Response(data)
 
 @api_view(['GET'])
+def export_file(request):
+	if 'GET' == request.method:
+		if request.COOKIES.get('sessionid'):
+			session_id = request.COOKIES.get('sessionid')
+			
+			# f = open(f'storage/uploads/{session_id}.csv', 'rb')
+
+			# headers = {
+			# 'Content-Type': 'text/csv',
+			# 'Content-Disposition': 'attachment; filename="Sentiment Analysis.csv"'
+			# }
+			
+			# response = Response(data=f, headers=headers)
+
+			response = FileResponse(open(f'storage/uploads/{session_id}.csv', 'rb'), filename="Sentiment Analysis.csv")
+
+			return response
+		else:
+			return Response(status=401)
+	else:
+		return Response(status=405)
+
+@api_view(['GET'])
 def test(request):
-	return Response("Test")
+	print(request.session.decode())
+	return Response("Hello")
 
