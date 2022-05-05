@@ -253,15 +253,6 @@ def export_file(request):
 	if 'GET' == request.method:
 		if request.COOKIES.get('sessionid'):
 			session_id = request.COOKIES.get('sessionid')
-			
-			# f = open(f'storage/uploads/{session_id}.csv', 'rb')
-
-			# headers = {
-			# 'Content-Type': 'text/csv',
-			# 'Content-Disposition': 'attachment; filename="Sentiment Analysis.csv"'
-			# }
-			
-			# response = Response(data=f, headers=headers)
 
 			response = FileResponse(open(f'storage/uploads/{session_id}.csv', 'rb'), filename="Sentiment Analysis.csv")
 
