@@ -9,3 +9,4 @@ django-filter
 django-cors-headers
 chardet
 django-samesite-none
+python-dotenv
