@@ -7,6 +7,8 @@ from rest_framework.exceptions import APIException
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 
+from django.contrib.sessions.backends.db import SessionStore
+
 from collections import Counter, OrderedDict
 
 from .utils import classify, preprocess_text, remove_stopwords, createSession, getEncoding, preprocessData
@@ -20,6 +22,8 @@ import os
 import traceback
 import json
 import chardet
+
+import server.settings
 
 import pandas as pd
 
@@ -38,8 +42,7 @@ def session(request):
 			'sessionid': session_key
 		}
 
-		response = Response(data=data)
-		return response
+		return Response(data=data)
 	else:
 		return Response(status=301)
 
@@ -50,9 +53,8 @@ This endpoint will save the file uploaded and preprocess the file.
 def upload(request):
 
 	if request.method == 'POST':
-		print(request.COOKIES.get('sessionid'))
-		if request.COOKIES.get('sessionid'):
-			session_id = request.COOKIES.get('sessionid')
+		if request.query_params['sessionid']:
+			session_id = request.query_params['sessionid']
 
 			uploaded_file = request.FILES['file']
 
@@ -88,8 +90,8 @@ def upload(request):
 def data_overview(request):
 
 	if 'GET' == request.method:
-		if request.COOKIES.get('sessionid'):
-			session_id = request.COOKIES.get('sessionid')
+		if request.query_params['sessionid']:
+			session_id = request.query_params['sessionid']
 
 			df = pd.read_csv(f'storage/uploads/{session_id}.csv')
 
@@ -111,9 +113,9 @@ def data_overview(request):
 def sentiment_overview(request):
 
 	if 'GET' == request.method:
-		if request.COOKIES.get('sessionid'):
+		if request.query_params['sessionid']:
 
-			session_id = request.COOKIES.get('sessionid')
+			session_id = request.query_params['sessionid']
 
 			df = pd.read_csv(f'storage/uploads/{session_id}.csv')
 
@@ -146,8 +148,8 @@ def sentiment_overview(request):
 def sentiment_trend(request):
 
 	if 'GET' == request.method:
-		if request.COOKIES.get('sessionid'):
-			session_id = request.COOKIES.get('sessionid')
+		if request.query_params['sessionid']:
+			session_id = request.query_params['sessionid']
 
 			df = pd.read_csv(f'storage/uploads/{session_id}.csv')
 
@@ -205,8 +207,8 @@ def sentiment_trend(request):
 def all_data(request):
 
 	if 'GET' == request.method:
-		if request.COOKIES.get('sessionid'):
-			session_id = request.COOKIES.get('sessionid')
+		if request.query_params['sessionid']:
+			session_id = request.query_params['sessionid']
 
 			result = pd.read_csv(f'storage/uploads/{session_id}.csv')
 
@@ -252,8 +254,8 @@ def model_stats(request):
 @api_view(['GET'])
 def export_file(request):
 	if 'GET' == request.method:
-		if request.COOKIES.get('sessionid'):
-			session_id = request.COOKIES.get('sessionid')
+		if request.query_params['sessionid']:
+			session_id = request.query_params['sessionid']
 
 			response = FileResponse(open(f'storage/uploads/{session_id}.csv', 'rb'), filename="Sentiment Analysis.csv")
 
@@ -265,6 +267,14 @@ def export_file(request):
 
 @api_view(['GET'])
 def test(request):
-	print(request.session.decode())
-	return Response("Hello")
+	
+	s = SessionStore()
+
+	s['foo'] = 'bar'
+	s.create()
+
+	response = HttpResponse()
+	response.set_cookie('foo', 'bar')
+
+	return response
 
