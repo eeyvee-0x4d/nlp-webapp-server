@@ -8,3 +8,4 @@ markdown
 django-filter
 django-cors-headers
 chartdet
+django-samesite-none
