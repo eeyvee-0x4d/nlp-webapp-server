@@ -50,7 +50,7 @@ This endpoint will save the file uploaded and preprocess the file.
 def upload(request):
 
 	if request.method == 'POST':
-		console.log(request.COOKIES.get('sessionid'))
+		print(request.COOKIES.get('sessionid'))
 		if request.COOKIES.get('sessionid'):
 			session_id = request.COOKIES.get('sessionid')
 
