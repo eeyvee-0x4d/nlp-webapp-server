@@ -148,4 +148,4 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 SESSION_ENGINE = 'django.contrib.sessions.backends.signed_cookies'
 SESSION_COOKIES_SAMESITE = 'None'
-SESSION_COOKIE_DOMAIN = '..localhost' # CONFIG['DOMAIN']
+SESSION_COOKIE_DOMAIN = '.0.0.0.0' # CONFIG['DOMAIN']
